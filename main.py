@@ -2,7 +2,8 @@
 # Todo esse grosso foi traduzido de um projeto que fiz anteriormente:
 # https://github.com/silva-guimaraes/mandelbrot-explorador/
 
-type RGB = tuple[int, int, int]
+# não disponivel na versão recente do pypy (3.10)
+# type RGB = tuple[int, int, int]
 
 imagem_saida_altura, imagem_saida_largura, cores_canais = 1000, 1000, 3
 
@@ -17,7 +18,7 @@ def salvar_imagem():
         arquivo_saida.write('\0') 
 
 def caso_muito_distante(z: complex) -> bool:
-    return (z.imag*z.imag + z.real*z.real) > 4
+    return z.imag*z.imag + z.real*z.real > 4
 
 def f(z: complex, c: complex) -> complex:
     return z*z + c
@@ -34,7 +35,7 @@ def iterar(pixel_pos: complex, max: int) -> tuple[None, int] | tuple[complex, No
 def clamp(x: int) -> int:
     return min(x, 255)
 
-def colorir_pixel(i, j, x: RGB):
+def colorir_pixel(i, j, x): # x: RGB
     offset = i*imagem_saida_largura * cores_canais + j * cores_canais
     r, g, b = x
 
@@ -43,7 +44,7 @@ def colorir_pixel(i, j, x: RGB):
     imagem_saida_buffer[offset + 2] = clamp(b)
 
 
-def cor_em_polinomio_bernstein(iteracoes_total: int, maximo_iteracoes: int) -> RGB:
+def cor_em_polinomio_bernstein(iteracoes_total: int, maximo_iteracoes: int): # -> RGB
     # https://en.wikipedia.org/wiki/Bernstein_polynomial
     normalizado: float = iteracoes_total / maximo_iteracoes
     return (
@@ -71,8 +72,6 @@ def gerar_buffer():
     for i in range(imagem_saida_altura):
         for j in range(imagem_saida_largura):
 
-            cor: RGB
-
             ponto_real = pixel_largura * j - plano_complexo_meia_largura + centro_offset_horizontal
             ponto_imag = pixel_altura * i - plano_complexo_meia_altura + centro_offset_vertical
 
@@ -80,11 +79,11 @@ def gerar_buffer():
             
             _, iteracoes_total = iterar(pixel_pos, maximo_iteracoes)
 
-            caso_convergencia_finita: bool = iteracoes_total is None
+            caso_divergencia_infinita: bool = iteracoes_total is not None
 
-            if caso_convergencia_finita:
-                cor = (0, 0, 0)
-            else:
+            cor = (0, 0, 0) # RGB
+
+            if caso_divergencia_infinita:
                 cor = cor_em_polinomio_bernstein(iteracoes_total, maximo_iteracoes)
 
             colorir_pixel(i, j, cor)
