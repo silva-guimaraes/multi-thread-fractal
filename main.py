@@ -1,7 +1,10 @@
 
+# Todo esse grosso foi traduzido de um projeto que fiz anteriormente:
+# https://github.com/silva-guimaraes/mandelbrot-explorador/
+
 type RGB = tuple[int, int, int]
 
-imagem_saida_altura, imagem_saida_largura, cores_canais = 500, 500, 3
+imagem_saida_altura, imagem_saida_largura, cores_canais = 1000, 1000, 3
 
 imagem_saida_buffer_tamanho = imagem_saida_altura * imagem_saida_largura * cores_canais
 
@@ -13,12 +16,18 @@ def salvar_imagem():
         arquivo_saida.write(' '.join(map(str, imagem_saida_buffer)))
         arquivo_saida.write('\0') 
 
+def caso_muito_distante(z: complex) -> bool:
+    return (z.imag*z.imag + z.real*z.real) > 4
+
+def f(z: complex, c: complex) -> complex:
+    return z*z + c
+
 def iterar(pixel_pos: complex, max: int) -> tuple[None, int] | tuple[complex, None]:
     z = complex(0, 0)
     c = pixel_pos
     for i in range(max):
-        z = z**2 + c
-        if (z.imag**2 + z.real**2) > 4:
+        z = f(z, c)
+        if caso_muito_distante(z):
             return None, i
     return z, None
 
@@ -34,13 +43,22 @@ def colorir_pixel(i, j, x: RGB):
     imagem_saida_buffer[offset + 2] = clamp(b)
 
 
+def cor_em_polinomio_bernstein(iteracoes_total: int, maximo_iteracoes: int) -> RGB:
+    # https://en.wikipedia.org/wiki/Bernstein_polynomial
+    normalizado: float = iteracoes_total / maximo_iteracoes
+    return (
+        int(9   * (1 - normalizado) * normalizado**3 * 255),
+        int(15  * (1 - normalizado) * normalizado**2 * 255),
+        int(8.5 * (1 - normalizado) * normalizado**1 * 255)
+    )
 
 def gerar_buffer():
-    plano_complexo_largura: float = 4
-    plano_complexo_altura:  float = 4
+    zoom = 6
+    plano_complexo_largura: float = 4 / zoom
+    plano_complexo_altura:  float = 4 / zoom
 
-    centro_offset_horizontal: float = 0
-    centro_offset_vertical:   float = 0
+    centro_offset_horizontal: float = -0.8
+    centro_offset_vertical:   float = -0.5
 
     plano_complexo_meia_altura:  float = plano_complexo_altura / 2
     plano_complexo_meia_largura: float = plano_complexo_largura / 2
@@ -67,16 +85,11 @@ def gerar_buffer():
             if caso_convergencia_finita:
                 cor = (0, 0, 0)
             else:
-                normalizado: float = iteracoes_total / maximo_iteracoes
-                # https://en.wikipedia.org/wiki/Bernstein_polynomial
-                cor = (
-                    int(9   * (1 - normalizado) * normalizado**3 * 255),
-                    int(15  * (1 - normalizado) * normalizado**2 * 255),
-                    int(8.5 * (1 - normalizado) * normalizado**1 * 255)
-                )
+                cor = cor_em_polinomio_bernstein(iteracoes_total, maximo_iteracoes)
 
             colorir_pixel(i, j, cor)
 
 
-gerar_buffer()
-salvar_imagem()
+if __name__ == "__main__":
+    gerar_buffer()
+    salvar_imagem()
