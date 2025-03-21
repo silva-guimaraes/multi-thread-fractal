@@ -2,13 +2,13 @@
 # Todo esse grosso foi traduzido de um projeto que fiz anteriormente:
 # https://github.com/silva-guimaraes/mandelbrot-explorador/
 
+# infelizmente a performance desse programa nao é a que fosse esperada e por isso
+# decidi escrever uma versão em C.
+
 # import concurrent.futures
 import threading
 
 lock = threading.Lock()
-
-# não disponivel na versão mais recente do pypy (3.11)
-# type RGB = tuple[int, int, int]
 
 imagem_saida_altura, imagem_saida_largura, cores_canais = 1000, 1000, 3
 

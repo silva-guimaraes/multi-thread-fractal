@@ -1,9 +1,8 @@
 
+// Todo esse grosso foi traduzido de um projeto que fiz anteriormente:
+// https://github.com/silva-guimaraes/mandelbrot-explorador/
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_events.h>
-#include <SDL2/SDL_keycode.h>
-#include <SDL2/SDL_timer.h>
+
 #include <complex.h>
 #include <math.h>
 #include <pthread.h>
@@ -12,6 +11,15 @@
 #include <string.h>
 #include <sys/types.h>
 #include <time.h>
+
+
+#ifdef USAR_SDL_
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_keycode.h>
+#include <SDL2/SDL_timer.h>
+#endif /* ifdef benchmark */
+
 
 #define max(a, b) a > b ? a : b
 
@@ -209,37 +217,43 @@ void single_thread(imagem imagem, int i_inicio, int i_fim,
     gerar_mandelbrot(&args);
 }
 
+#define cores_canais 3
+
+#ifndef USAR_SDL_
+#define imagem_altura 512
+#define imagem_largura 512
+#else
 #define imagem_altura 256
 #define imagem_largura 256
-#define cores_canais 3
+#endif
 
 void benchmark(imagem imagem) {
     pthread_t threads[100];
 
+    double centro_offset_horizontal = -0.630802899999805,
+    centro_offset_vertical = -0.449996201018602;
+
     for (int i = 1; i <= 24; i++) {
         double soma = 0;
-        int numero_iteracoes = 50;
+        int numero_iteracoes = 10;
         for (int j = 0; j < numero_iteracoes; j++) {
 
             struct timespec start, end;
             clock_gettime(CLOCK_MONOTONIC, &start);
 
-            multi_thread(imagem, threads, i, 0, imagem.altura, 0, 0, 0, 200);
+            multi_thread(
+                imagem, threads, i, 0, imagem.altura,
+                centro_offset_horizontal, centro_offset_vertical, 2, 200
+            );
 
             clock_gettime(CLOCK_MONOTONIC, &end);
 
             double elapsed =
                 (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
-            // printf("\ttempo de execução médio: %.6f segundos\n", elapsed);
             soma += elapsed;
         }
         printf("número de threads: %d, tempo de execução médio: %.6f segundos\n", i,
                soma / numero_iteracoes);
-    }
-
-    salvar_imagem(imagem);
-    if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-        printf("SDL_Init Error: %s\n", SDL_GetError());
     }
 }
 
@@ -254,9 +268,14 @@ int main(void) {
         .buffer = buffer,
     };
 
+#ifndef USAR_SDL_
+
+    benchmark(imagem);
+    salvar_imagem(imagem);
+
+#else
     int zoom = 0;
     double centro_offset_horizontal = -0.630802899999805,
-    // centro_offset_vertical = -0.5;
     centro_offset_vertical = -0.449996201018602;
 
     pthread_t threads[100];
@@ -384,6 +403,6 @@ int main(void) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
-    return 0;
+#endif /* ifndef USAR_SDL_ */
     return 0;
 }
