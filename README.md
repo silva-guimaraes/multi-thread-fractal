@@ -1,5 +1,7 @@
 
-### fractal multi thread
+# fractal multi thread
+
+![banner](banner.png)
 
 ## Conjunto de Mandelbrot
 
@@ -68,7 +70,7 @@ Parâmetros:
 - Largura da imagem: 512 pixels
 - Profundidade de cores: 24bits (3 bytes)
 - Posição horizontal: -0.630802899999805
-- Posição Vertical: -0.449996201018602
+- Posição vertical: -0.449996201018602
 - Número de amostragem por cada teste: 10 iterações
 
 Caso precise, será necessário alterar e recompilar o código fonte para alterar os parâmetros.
@@ -78,4 +80,4 @@ Especificações da máquina:
 - Número de núcleos: 12
 - Número de threads por núcleo: 2 (total 24)
 - GPU: Intel Alder Lake-UP3 GT2
-- Memória: 15679MiB
+- Memória: 15,6GiB
