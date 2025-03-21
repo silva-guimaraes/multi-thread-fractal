@@ -4,7 +4,8 @@
 
 # import concurrent.futures
 import threading
-import math
+
+lock = threading.Lock()
 
 # não disponivel na versão mais recente do pypy (3.11)
 # type RGB = tuple[int, int, int]
@@ -67,7 +68,7 @@ def cor_em_polinomio_bernstein(iteracoes_total: int, maximo_iteracoes: int): # -
 
 def gerar_buffer(
         maximo_iteracoes: int = 200,
-        numero_threads: int = 1,
+        numero_threads: int = 12,
         zoom: float = 0,
         centro_offset: tuple[float, float] = (0, 0)
 ) -> bytearray:
@@ -84,36 +85,33 @@ def gerar_buffer(
     pixel_largura: float = plano_complexo_largura / imagem_saida_largura
 
     class MyThread(threading.Thread):
-        def __init__(self, faixa_inicio: int, faixa_fim: int):
+        def __init__(self, linha_inicio: int, linha_final):
             super().__init__()
-            self.faixa_inicio: int = faixa_inicio
-            self.faixa_fim: int = faixa_fim
+            self.linha_inicio: int = linha_inicio
+            self.linha_final: int = linha_final
 
         def run(self) -> None:
-            for i in range(self.faixa_inicio, self.faixa_fim):
-                fracional, inteiro = math.modf(i / imagem_saida_largura)
-                i, j = round(inteiro), round(fracional * imagem_saida_largura)
+            for i in range(self.linha_inicio, self.linha_final):
+                for j in range(imagem_saida_largura):
+                    ponto_real = pixel_largura * j - plano_complexo_meia_largura + centro_offset_horizontal
+                    ponto_imag = pixel_altura * i - plano_complexo_meia_altura + centro_offset_vertical
 
-                ponto_real = pixel_largura * j - plano_complexo_meia_largura + centro_offset_horizontal
-                ponto_imag = pixel_altura * i - plano_complexo_meia_altura + centro_offset_vertical
+                    pixel_pos = complex(ponto_real, ponto_imag)
+                    
+                    _, iteracoes_total = iterar(pixel_pos, maximo_iteracoes)
 
-                pixel_pos = complex(ponto_real, ponto_imag)
-                
-                _, iteracoes_total = iterar(pixel_pos, maximo_iteracoes)
+                    caso_divergencia_infinita: bool = iteracoes_total is not None
 
-                caso_divergencia_infinita: bool = iteracoes_total is not None
+                    cor = (0, 0, 0) # RGB
 
-                cor = (0, 0, 0) # RGB
+                    if caso_divergencia_infinita:
+                        cor = cor_em_polinomio_bernstein(iteracoes_total, maximo_iteracoes)
 
-                if caso_divergencia_infinita:
-                    cor = cor_em_polinomio_bernstein(iteracoes_total, maximo_iteracoes)
+                    colorir_pixel(i, j, cor)
 
-                colorir_pixel(i, j, cor)
-
-    bytes_intervalo = int((imagem_saida_largura * imagem_saida_altura) / numero_threads)
-
+    divisao_linhas: int = int(imagem_saida_altura / numero_threads)
     threads: list[MyThread] = [
-        MyThread(bytes_intervalo*i, bytes_intervalo*(i+1))
+        MyThread(divisao_linhas*i, divisao_linhas*(i+1))
         for i in range(numero_threads)
     ]
     [t.start() for t in threads]
