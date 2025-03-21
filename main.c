@@ -1,6 +1,8 @@
 
 // Todo esse grosso foi traduzido de um projeto que fiz anteriormente:
 // https://github.com/silva-guimaraes/mandelbrot-explorador/
+//
+// documentação inclui erros de semântica e sintaxe. Não tive tempo de revisar. 
 
 
 #include <complex.h>
@@ -30,6 +32,7 @@ typedef struct {
 
 #define tamanho_bytes(x) x.altura *x.largura *x.canais
 
+// salva a imagem em um codificai bem simples de ser feita: https://en.wikipedia.org/wiki/Netpbm .
 void salvar_imagem(imagem imagem) {
 
     FILE *arquivo_saida = fopen("output.ppm", "w");
@@ -42,10 +45,26 @@ void salvar_imagem(imagem imagem) {
     fclose(arquivo_saida);
 }
 
+// z * z + c
+// retorna -1 caso o ponto não divirja para o infinito. retorna número de interações antes de ter divergido
+// caso divirja.
 int iterar(double complex c, int maximo_iteracoes) {
     double complex z = 0 + 0i;
     for (int i = 0; i < maximo_iteracoes; i++) {
         z = z * z + c;
+        // isso é uma otimização. esse é o calculo da distancia para verificar
+        // se o ponto irá divergir. se a distancia do centro for maior do que 2,
+        // a divergência é certa. o calculo da distancia euclidiana do centro em duas dimensões é dado por:
+        // \sqrt{i^2 + r^2}
+        // queremos saber se a distancia é maior do que 2. essa é a equação com que estamos interessados:
+        // \sqrt{i^2 + r^2} > 2
+        // isso é ótimo para descobrir se o ponto vai de fato ou não divergir, porém
+        // calcular a raiz quadrada pode ser custoso demais quando fazemos isso milhões de vezes.
+        // é possível se livrar dela:
+        // \sqrt{i^2 + r^2}^2 > 2^2
+        // |i^2 + r^2| > 4
+        // como o valor de i^2 e r^2 sempre será positivo, removemos o modulo
+        // i^2 + r^2 > 4
         if (pow(cimag(z), 2) + pow(creal(z), 2) > 4)
             return i;
     }
@@ -56,6 +75,7 @@ typedef struct {
     int r, g, b;
 } cor;
 
+// colore o fractal
 cor cor_polinomio_bernstein(int iteracoes_total, int maximo_iteracoes) {
     double normalizado = (double)iteracoes_total / maximo_iteracoes;
     return (cor){
@@ -83,11 +103,6 @@ typedef struct {
 
 void *gerar_mandelbrot(void *x) {
 
-    int err = pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-    if (err) {
-        fprintf(stderr, "falha na configuração de thread! %s\n", strerror(err));
-        return NULL;
-    }
     // funções em pthread_create precisam ser genéricas. a assinatura
     // da função pede que os parâmetros da função incluam apenas um único ponteiro void.
     //
@@ -139,19 +154,22 @@ void *gerar_mandelbrot(void *x) {
             double y = i * pixel_altura - plano_complexo_meia_altura +
                 centro_offset_vertical;
 
+            // 
             int iteracoes = iterar(x + y * I, maximo_iteracoes);
 
+            // cor base caso o ponto tenha divergido
             cor c = cor_polinomio_bernstein(iteracoes, maximo_iteracoes);
 
+            // cor neutra. ponto 
             if (iteracoes < 0)
                 c = (cor) { 0 };
 
-            // o conjunto de bytes que representa a imagem é uma array contigua.
+            // o conjunto de bytes que representa a imagem é uma array contígua.
             // isso transforma as coordenadas dos pixels para um único indice
-            // no framebuffer.
+            // no buffer.
             int offset = i * imagem.largura * imagem.canais + j * imagem.canais;
 
-            // todas as threads estão operando no mesmo framebuffer quando essa operação ocorre.
+            // todas as threads estão operando no mesmo buffer quando essa operação ocorre.
             // o resultado é apenas coerente pois nenhuma linha da imagem é compartilhada por mais de uma thread.
             imagem.buffer[offset + 0] = c.r;
             imagem.buffer[offset + 1] = c.g;
@@ -162,14 +180,22 @@ void *gerar_mandelbrot(void *x) {
     return NULL;
 }
 
+// roda o algoritmo paralelamente.
+// faz o papel de dividir a imagem em faixas horizontais para que as threads não atrapalhem o trabalho de umas
+// das outras.
 void multi_thread(imagem imagem, pthread_t threads[], int numero_threads, int i_inicio, int i_fim,
                   double centro_offset_horizontal,
                   double centro_offset_vertical, int zoom,
                   int maximo_iteracoes) {
     int divisao_linhas = imagem.altura / numero_threads;
     int err;
-    gerar_args argumentos[100];
 
+    // IMPORTANTÍSSIMO QUE ISSO SEJA FEITO
+    // tente declarar esse argumentos no próximo loop, o loop onde as threads são criadas.
+    // não vai funcionar. a struct na stack é sobreposta imediatamente a cada iteração do loop
+    // antes que as threads consigam iniciar e o resultado é quase sempre apenas a ultima metade
+    // da imagem sendo renderizada pois todas as threads receberam os mesmos argumentos.
+    gerar_args argumentos[100];
     for (int i = 0; i < numero_threads; i++) {
         gerar_args args = {
             .imagem = imagem,
@@ -180,41 +206,30 @@ void multi_thread(imagem imagem, pthread_t threads[], int numero_threads, int i_
             .centro_offset_vertical = centro_offset_vertical,
             .centro_offset_horizontal = centro_offset_horizontal,
         };
+        // as vezes a divisão de threads não é perfeita e quando não é,
+        // uma faixa preta resta no final da imagem para onde nenhums thread ficou encarregada.
         if (i + 1 == numero_threads) {
+            // isso faz com que a ultima thread quebre o nosso galho e complete a faixa restante
+            // caso a divisão não tenha sido perfeita.
             args.i_fim = imagem.altura;
         }
+        // guarda os argumentos para logo a seguir
         argumentos[i] = args;
     }
 
     for (int i = 0; i < numero_threads; i++) {
+        // cria as threads!!!
         err = pthread_create(threads + i, NULL, &gerar_mandelbrot, argumentos + i);
         if (err)
             fprintf(stderr, "falha ao criar thread! %s\n", strerror(err));
     }
 
-    // aguarda para que todas as threads terminem.
+    // aguarda até que todas as threads terminem.
     for (int i = 0; i < numero_threads; i++)
         pthread_join(threads[i], NULL);
     // enquanto isso estiver esperando o SDL não estará recenbendo atualizações.
-    // o programa fica completamente irresponsivo como consequencia e
-    // é uma pessima experiencia.
-}
-
-void single_thread(imagem imagem, int i_inicio, int i_fim,
-                   double centro_offset_horizontal,
-                   double centro_offset_vertical, int zoom,
-                   int maximo_iteracoes) {
-    gerar_args args = {
-        .imagem = imagem,
-        .zoom = zoom,
-        .maximo_iteracoes = maximo_iteracoes,
-        .i_inicio = i_inicio,
-        .i_fim = i_fim,
-        .centro_offset_vertical = centro_offset_vertical,
-        .centro_offset_horizontal = centro_offset_horizontal,
-    };
-
-    gerar_mandelbrot(&args);
+    // o programa fica completamente irresponsivo.
+    // é uma péssima experiencia.
 }
 
 #define cores_canais 3
@@ -386,7 +401,7 @@ int main(void) {
 
         // renderização:
 
-        // infezlimente não é possível atualizar a textura enquanto threads estão
+        // infelizmente não é possível atualizar a textura enquanto threads estão
         // ativamente modificando o buffer.
         // SDL_UpdateTexture(texture, NULL, buffer, imagem.largura * imagem.canais);
 
