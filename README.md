@@ -71,7 +71,7 @@ Parâmetros:
 - Posição Vertical: -0.449996201018602
 - Número de amostragem por cada teste: 10 iterações
 
-É necessário alterar e recompilar os parâmetros no código fonte.
+Caso precise, será necessário alterar e recompilar o código fonte para alterar os parâmetros.
 
 Especificações da máquina:
 - CPU: 12th Gen Intel i5-1235U (12) @ 4.400GHz
